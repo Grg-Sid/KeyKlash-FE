@@ -1,4 +1,4 @@
 export interface RoomCreateRequest {
-  text: string;
   maxPlayers: number;
+  creatorName: string;
 }

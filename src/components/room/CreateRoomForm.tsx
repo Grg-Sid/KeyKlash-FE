@@ -2,18 +2,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createRoom } from "@/services/gameService";
 import type { Room } from "@/types/Room";
-import { generateRandomString } from "@/utils";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 export function CreateRoomForm() {
+  const navigate = useNavigate();
+
+  const [creatorName, setCreatorName] = useState<string>("");
   const [maxPlayers, setMaxPlayers] = useState<number>(10);
   const [roomData, setRoomData] = useState<Room | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = Number(e.target.value);
-    setMaxPlayers(value);
+    const { name, value } = e.target;
+
+    if (name === "maxPlayers") {
+      const parsedValue = parseInt(value, 10);
+      if (!isNaN(parsedValue)) {
+        setMaxPlayers(parsedValue);
+      }
+    } else if (name === "creatorName") {
+      setCreatorName(value);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -27,10 +38,11 @@ export function CreateRoomForm() {
 
     try {
       setLoading(true);
-      const text = generateRandomString(1000);
-      const room = await createRoom({ maxPlayers, text });
+      const room = await createRoom({ maxPlayers, creatorName });
       setRoomData(room);
-      alert(`Room created with ID: ${room.id}`);
+
+      localStorage.setItem("roomCode", room.code);
+      navigate(`/room/${room.code}`);
     } catch (err) {
       setError("Failed to create room. Please try again.");
       console.error("Create room error:", err);
@@ -51,6 +63,14 @@ export function CreateRoomForm() {
         onChange={handleChange}
         disabled={loading}
       />
+      <Input
+        type="text"
+        placeholder="Name"
+        name="creatorName"
+        value={creatorName}
+        onChange={handleChange}
+        disabled={loading}
+      ></Input>
       {error && <p className="text-red-500 text-sm">{error}</p>}
       <Button type="submit" disabled={loading}>
         {loading ? "Creating..." : "Create Room"}

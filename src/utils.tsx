@@ -1,10 +1,5 @@
-// To be changed COMPLETELY
-export function generateRandomString(length: number): string {
-  const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-  let result = "";
-  for (let i = 0; i < length; i++) {
-    const randomIndex = Math.floor(Math.random() * characters.length);
-    result += characters[randomIndex];
-  }
-  return result;
+import { quoteApi } from "./services/api";
+
+export function getRandomQuote(): Promise<{ quote: { content: string } }> {
+  return quoteApi.get("/random?minLength=100&maxLength=300");
 }

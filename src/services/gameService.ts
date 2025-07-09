@@ -1,7 +1,7 @@
 import type { RoomCreateRequest } from "../types/RoomCreateRequest";
 import type { Room } from "../types/Room";
-import api from "./api";
 import type { RoomJoinRequest } from "../types/RoomJoinRequest";
+import { api } from "./api";
 
 export const helloWorld = async (): Promise<string> => {
   try {

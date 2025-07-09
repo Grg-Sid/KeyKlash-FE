@@ -6,9 +6,7 @@ export interface Room {
   code: string;
   gameState: GameState;
   text: string;
-  players: {
-    player: Player;
-  }[];
+  players: Player[];
   createdAt: Date;
   gameStartedAt?: Date;
   gameEndedAt?: Date;

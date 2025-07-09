@@ -1,6 +1,8 @@
+import type { Player } from "@/types/Player";
+
 type RoomInfoCardProps = {
   code: string;
-  players: string[];
+  players: Player[];
 };
 
 export default function RoomInfoCard({ code, players }: RoomInfoCardProps) {
@@ -11,7 +13,7 @@ export default function RoomInfoCard({ code, players }: RoomInfoCardProps) {
       <ul className="list-disc list-inside">
         {players.map((player, index) => (
           <li key={index} className="text-sm text-muted-foreground">
-            {player}
+            {player.nickname})
           </li>
         ))}
       </ul>
