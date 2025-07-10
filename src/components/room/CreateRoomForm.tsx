@@ -42,6 +42,8 @@ export function CreateRoomForm() {
       setRoomData(room);
 
       localStorage.setItem("roomCode", room.code);
+      localStorage.setItem("playerId", room.createdBy.id);
+      
       navigate(`/room/${room.code}`);
     } catch (err) {
       setError("Failed to create room. Please try again.");

@@ -11,4 +11,5 @@ export interface Room {
   gameStartedAt?: Date;
   gameEndedAt?: Date;
   maxPlayers: number;
+  createdBy: Player;
 }

@@ -1,93 +1,129 @@
-import { useEffect, useState } from "react";
+import { useDebounce } from "@/hooks/useDebounce";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { TypingArea, type PlayerCursor } from "./TypingArea";
-import type { Room } from "@/types/Room";
 import { getRoomByCode } from "@/services/gameService";
-
-const sampleText = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.`;
-
-const mockPlayers: PlayerCursor[] = [
-  {
-    playerId: "1",
-    position: 10,
-    color: "red",
-    nickname: "Player1",
-  },
-  {
-    playerId: "2",
-    position: 20,
-    color: "blue",
-    nickname: "Player2",
-  },
-  {
-    playerId: "3",
-    position: 15,
-    color: "green",
-    nickname: "Player3",
-  },
-];
+import type { GameMessage } from "@/types/GameMessage";
+import type { Player } from "@/types/Player";
+import type { Room } from "@/types/Room";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
 
 export default function GamePage() {
-  const roomCode = localStorage.getItem("roomCode");
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const { roomCode } = useParams<{ roomCode: string }>();
+  const myPlayerId = localStorage.getItem("playerId");
+
   const [roomData, setRoomData] = useState<Room | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [myPosition, setMyPosition] = useState(0);
-  const [playerCursors, setPlayerCursors] =
-    useState<PlayerCursor[]>(mockPlayers);
 
-  const onType = (newPosition: number) => {
-    setMyPosition(newPosition);
-  };
+  const debouncedPoisiton = useDebounce(myPosition, 200);
 
-  // This simulates the movement of player cursors over time.
+  const handleMessage = useCallback(
+    (message: GameMessage) => {
+      if (message.type === "ROOM_UPDATE") {
+        const updatedRoom = message.payload as Room;
+        setRoomData(updatedRoom);
+
+        const myData = updatedRoom.players.find(
+          (p: Player) => p.id === myPlayerId
+        );
+        if (myData && myData.currentPosition !== myPosition) {
+          setMyPosition(myData.currentPosition);
+        }
+      }
+    },
+    [myPlayerId, myPosition]
+  );
+
+  const { sendMessage, isConnected } = useWebSocket(
+    roomData?.id || null,
+    handleMessage
+  );
+
   useEffect(() => {
     if (!roomCode) {
-      console.error("Room Code not found in localStorage");
+      setError("No room code provided in URL.");
+      setIsLoading(false);
       return;
     }
-    const fetchRoomData = async () => {
-      try {
-        const room: Room = await getRoomByCode(roomCode);
-        console.log("Fetched room data:", room);
+    setIsLoading(true);
+    getRoomByCode(roomCode)
+      .then(setRoomData)
+      .catch((err) => {
+        console.error("Error fetching initial room data:", err);
+        setError("Could not load the game room");
+      })
+      .finally(() => setIsLoading(false));
+  }, [roomCode]);
 
-        setRoomData(room);
-      } catch (error) {
-        console.error("Error fetching room data:", error);
-      }
-    };
+  useEffect(() => {
+    if (isConnected && roomData && myPlayerId && debouncedPoisiton > 0) {
+      sendMessage("/app/game/progress", {
+        roomId: roomData.id,
+        playerId: myPlayerId,
+        currentPosition: debouncedPoisiton,
+        typedText: roomData.text.substring(0, debouncedPoisiton),
+      });
+    }
+  }, [debouncedPoisiton, isConnected, roomData, myPlayerId, sendMessage]);
 
-    const interval = setInterval(() => {
-      setPlayerCursors((prev) =>
-        prev.map((player) => ({
-          ...player,
-          position: Math.min(
-            player.position + 1,
-            roomData?.text.length || sampleText.length
-          ),
-        }))
-      );
-    }, 1000);
+  const onType = useCallback((newPosition: number) => {
+    setMyPosition(newPosition);
+  }, []);
 
-    fetchRoomData();
-    setIsLoading(false);
-    return () => clearInterval(interval);
-  }, [roomCode, roomData?.text]);
+  const playerCursors = useMemo<PlayerCursor[]>(() => {
+    if (!roomData?.players) return [];
+
+    return roomData.players
+      .filter((player) => player.id !== myPlayerId)
+      .map((player: Player) => ({
+        playerId: player.id,
+        position: player.currentPosition,
+        color: "grey",
+        nickname: player.nickname,
+      }));
+  }, [roomData?.players, myPlayerId]);
+
+  if (isLoading) return <div>Loading Game...</div>;
+  if (error) return <div className="text-red-500">Error: {error}</div>;
+  if (!roomData) return <div>Game room not found.</div>;
 
   return (
-    <div className="game-page">
-      <h1 className="text-2xl font-bold mb-4">Game Room</h1>
-      <p className="mb-4">Room Code: {roomCode}</p>
+    <div className="game-page p-4 md:p-8">
+      <h1 className="text-2xl font-bold mb-1">Race against your friends!</h1>
+      <p className="mb-4 text-muted-foreground">Room Code: {roomData.code}</p>
+
       <TypingArea
-        text={roomData?.text || sampleText}
+        text={roomData.text}
         myPosition={myPosition}
         playerCursors={playerCursors}
         onType={onType}
+        isGameActive={roomData.gameState === "IN_PROGRESS"}
       />
-      <div className="player-cursors mt-4">
-        <h2 className="text-xl font-semibold">Player Cursors</h2>
-        <ul className="list-disc pl-5">
-          {playerCursors.map((player) => (
-            <li key={player.playerId}>
-              {player.nickname} - Position: {player.position}
+
+      <div className="player-progress mt-6">
+        <h2 className="text-xl font-semibold">Live Progress</h2>
+        <ul className="list-none space-y-2 mt-2">
+          {roomData.players.map((player) => (
+            <li key={player.id} className="p-2 border rounded-md bg-card">
+              <div className="flex justify-between items-center">
+                <span className="font-semibold" style={{ color: "black" }}>
+                  {player.nickname} {player.id === myPlayerId && "(You)"}
+                </span>
+                <span className="text-sm font-mono">{player.wpm} WPM</span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2 5 mt-1">
+                <div
+                  className="bg-primary h-2 5 rounded-full"
+                  style={{
+                    width: `${
+                      (player.currentPosition / roomData.text.length) * 100
+                    }%`,
+                  }}
+                ></div>
+              </div>
             </li>
           ))}
         </ul>

@@ -6,7 +6,7 @@ export interface Player {
   wpm: number;
   accuracy: number;
   isFinished: boolean;
-  joinedAt: Date;
-  finishedAt?: Date;
-  sessionId: string;
+  joinedAt: string;
+  finishedAt?: string | null;
+  sessionId?: string | null;
 }

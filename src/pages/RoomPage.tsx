@@ -1,96 +1,80 @@
 import RoomInfoCard from "@/components/room/RoomInfoCard";
 import { Button } from "@/components/ui/button";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { getRoomByCode } from "@/services/gameService";
+import type { GameMessage } from "@/types/GameMessage";
+import type { Player } from "@/types/Player";
 import type { Room } from "@/types/Room";
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
-
 export default function RoomPage() {
-  const roomCode = localStorage.getItem("roomCode");
   const navigate = useNavigate();
+  const myPlayerId = localStorage.getItem("playerId");
 
   const [roomData, setRoomData] = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!roomData) {
-      console.error("Room data not available");
-      return;
-    }
+  const handleMessage = useCallback(
+    (message: GameMessage) => {
+      console.log("Received Message:", message);
+      if (message.type === "ROOM_UPDATE") {
+        setRoomData(message.payload as Room);
+      } else if (message.type == "GAME_STARTED") {
+        setRoomData(message.payload as Room);
+        navigate(`/room/${(message.payload as Room).code}/game`);
+      }
+    },
+    [navigate]
+  );
 
-    navigate(`/room/${roomData.code}/game`);
-    console.log("Starting game for room:", roomData.id);
-  };
+  const { sendMessage, isConnected } = useWebSocket(
+    roomData?.id || null,
+    handleMessage
+  );
 
   useEffect(() => {
+    const roomCode = localStorage.getItem("roomCode");
     if (!roomCode) {
-      setError("Room code not found. Please join a room again.");
+      setError("Room code not found in local storage");
       setLoading(false);
       return;
     }
 
-    const fetchAndSubscribe = async () => {
-      // 1. Initial data fetch
-      try {
-        setLoading(true);
-        const room = await getRoomByCode(roomCode);
-        setRoomData(room);
+    setLoading(true);
+    getRoomByCode(roomCode)
+      .then((data: Room) => {
+        setRoomData(data);
         setError(null);
-      } catch (err) {
-        if (err instanceof Error && err.name !== "AbortError") {
-          console.error("Error fetching initial room data:", err);
-          setError("Failed to load room data. The room may not exist.");
-        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch room data:", err);
+        setError(
+          "Failed to load room. The room may not exist or the server is down."
+        );
+      })
+      .finally(() => {
         setLoading(false);
-        return;
-      } finally {
-        setLoading(false);
-      }
-
-      const eventSource = new EventSource(
-        `${API_URL}/api/room/${roomCode}/stream`
-      );
-      eventSourceRef.current = eventSource;
-
-      eventSource.onopen = () => {
-        console.log("SSE connection opened successfully.");
-        setError(null);
-      };
-
-      eventSource.addEventListener("playerUpdate", (event) => {
-        console.log("Received playerUpdate event:", event.data);
-        try {
-          const updatedRoom: Room = JSON.parse(event.data);
-          setRoomData(updatedRoom);
-        } catch (err) {
-          console.error("Error parsing SSE data:", err);
-        }
       });
+  }, []);
 
-      eventSource.onerror = (err) => {
-        console.error("EventSource failed:", err);
-        setError("Connection to the server was lost. Please refresh.");
-        eventSource.close(); // Close the connection on error
-      };
-    };
+  const handleStartGame = () => {
+    if (!isConnected) {
+      alert("Not connected to the server yet. Please wait.");
+      return;
+    }
 
-    fetchAndSubscribe();
+    if (!roomData || !myPlayerId) {
+      console.error("Cannot start game: Missing room or player data.");
+      return;
+    }
 
-    // 3. Cleanup function
-    return () => {
-      console.log("Cleaning up RoomPage effect.");
-
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        console.log("SSE connection closed.");
-      }
-    };
-  }, [roomCode]);
+    sendMessage("/app/game/start", {
+      roomId: roomData.id,
+      playerId: myPlayerId,
+    });
+  };
 
   if (loading) {
     return <div>Loading room...</div>;
@@ -104,19 +88,43 @@ export default function RoomPage() {
     return <div>Could not find room data.</div>;
   }
 
+  const waitingPlayer: Player = {
+    id: "waiting",
+    nickname: "wating for players...",
+    roomId: "",
+    currentPosition: 0,
+    wpm: 0,
+    accuracy: 0,
+    isFinished: false,
+    joinedAt: new Date().toISOString(),
+    finishedAt: null,
+    sessionId: null,
+  };
+
   return (
     <div className="space-y-4">
       <RoomInfoCard
         code={roomData.code}
         players={
-          roomData.players.length > 0
-            ? roomData.players
-            : [{ nickname: "Waiting for players..." }]
+          roomData.players.length > 0 ? roomData.players : [waitingPlayer]
         }
       />
-      <form onSubmit={handleSubmit}>
-        <Button type="submit">Start Game</Button>
-      </form>
+      <Button
+        onClick={handleStartGame}
+        disabled={!isConnected || roomData.players.length < 2}
+      >
+        {isConnected ? "Start Game" : "Connecting..."}
+      </Button>
+      {!isConnected && (
+        <p className="text-sm text-muted-foreground">
+          Attempting to connect to the server...{" "}
+        </p>
+      )}
+      {roomData.players.length < 2 && (
+        <p className="text-sm text-muted-foreground">
+          You need at least 2 players to start.
+        </p>
+      )}
     </div>
   );
 }
