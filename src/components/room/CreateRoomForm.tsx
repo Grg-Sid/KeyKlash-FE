@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createRoom } from "@/services/gameService";
-import type { Room } from "@/types/Room";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -10,7 +9,6 @@ export function CreateRoomForm() {
 
   const [creatorName, setCreatorName] = useState<string>("");
   const [maxPlayers, setMaxPlayers] = useState<number>(10);
-  const [roomData, setRoomData] = useState<Room | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,11 +37,10 @@ export function CreateRoomForm() {
     try {
       setLoading(true);
       const room = await createRoom({ maxPlayers, creatorName });
-      setRoomData(room);
 
       localStorage.setItem("roomCode", room.code);
       localStorage.setItem("playerId", room.createdBy.id);
-      
+
       navigate(`/room/${room.code}`);
     } catch (err) {
       setError("Failed to create room. Please try again.");
@@ -72,7 +69,7 @@ export function CreateRoomForm() {
         value={creatorName}
         onChange={handleChange}
         disabled={loading}
-      ></Input>
+      />
       {error && <p className="text-red-500 text-sm">{error}</p>}
       <Button type="submit" disabled={loading}>
         {loading ? "Creating..." : "Create Room"}

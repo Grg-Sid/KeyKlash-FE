@@ -2,6 +2,7 @@ import type { RoomCreateRequest } from "../types/RoomCreateRequest";
 import type { Room } from "../types/Room";
 import type { RoomJoinRequest } from "../types/RoomJoinRequest";
 import { api } from "./api";
+import type { Player } from "@/types/Player";
 
 export const helloWorld = async (): Promise<string> => {
   try {
@@ -35,9 +36,10 @@ export const createRoom = async (request: RoomCreateRequest): Promise<Room> => {
   }
 };
 
-export const joinRoom = async (request: RoomJoinRequest): Promise<Room> => {
+export const joinRoom = async (request: RoomJoinRequest): Promise<Player> => {
   try {
-    const response = await api.post<Room>("/room/join", request);
+    console.log(request);
+    const response = await api.post<Player>("/room/join", request);
     return response.data;
   } catch (error) {
     console.error("Error joining room:", error);

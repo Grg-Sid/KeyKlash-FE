@@ -23,7 +23,8 @@
     "react-router-dom": "^7.6.3",
     "sockjs-client": "^1.6.1",
     "tailwind-merge": "^3.3.1",
-    "tailwindcss": "^4.1.10"
+    "tailwindcss": "^4.1.10",
+    "use-debounce": "^10.0.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.29.0",

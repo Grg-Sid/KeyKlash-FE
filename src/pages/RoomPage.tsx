@@ -12,13 +12,13 @@ export default function RoomPage() {
   const navigate = useNavigate();
   const myPlayerId = localStorage.getItem("playerId");
 
+  const [isCreator, setIsCreator] = useState<boolean>(false);
   const [roomData, setRoomData] = useState<Room | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const handleMessage = useCallback(
     (message: GameMessage) => {
-      console.log("Received Message:", message);
       if (message.type === "ROOM_UPDATE") {
         setRoomData(message.payload as Room);
       } else if (message.type == "GAME_STARTED") {
@@ -45,6 +45,7 @@ export default function RoomPage() {
     setLoading(true);
     getRoomByCode(roomCode)
       .then((data: Room) => {
+        setIsCreator(data.createdBy.id === myPlayerId);
         setRoomData(data);
         setError(null);
       })
@@ -57,7 +58,7 @@ export default function RoomPage() {
       .finally(() => {
         setLoading(false);
       });
-  }, []);
+  }, [myPlayerId]);
 
   const handleStartGame = () => {
     if (!isConnected) {
@@ -109,15 +110,17 @@ export default function RoomPage() {
           roomData.players.length > 0 ? roomData.players : [waitingPlayer]
         }
       />
-      <Button
-        onClick={handleStartGame}
-        disabled={!isConnected || roomData.players.length < 2}
-      >
-        {isConnected ? "Start Game" : "Connecting..."}
-      </Button>
+      {isCreator && (
+        <Button
+          onClick={handleStartGame}
+          disabled={!isConnected || roomData.players.length < 2}
+        >
+          {isConnected ? "Start Game" : "Connecting..."}
+        </Button>
+      )}
       {!isConnected && (
         <p className="text-sm text-muted-foreground">
-          Attempting to connect to the server...{" "}
+          Attempting to connect to the server...
         </p>
       )}
       {roomData.players.length < 2 && (

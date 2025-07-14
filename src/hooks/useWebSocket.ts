@@ -20,7 +20,7 @@ export const useWebSocket = (
       onConnect: () => {
         setIsConnected(true);
         console.log("WebSocket connected");
-        client.subscribe(`topic/room/${roomId}`, (message: IMessage) => {
+        client.subscribe(`/topic/room/${roomId}`, (message: IMessage) => {
           onMessageReceived(JSON.parse(message.body));
         });
       },
@@ -38,7 +38,7 @@ export const useWebSocket = (
     stompClientRef.current = client;
 
     return () => {
-      if (stompClientRef.current?.activate) {
+      if (stompClientRef.current?.active) {
         stompClientRef.current.deactivate();
         console.log("WebSocket connection closed");
       }
