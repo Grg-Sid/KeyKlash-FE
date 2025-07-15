@@ -13,6 +13,7 @@ function App() {
         <Route path="/create-room" element={<CreateRoomForm />} />
         <Route path="/room/:roomCode" element={<RoomPage />} />
         <Route path="/room/:roomCode/game" element={<GamePage />} />
+        <Route path="/room/game" element={<GamePage />} />
       </Routes>
     </BrowserRouter>
   );

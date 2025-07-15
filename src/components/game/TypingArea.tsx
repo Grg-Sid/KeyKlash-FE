@@ -125,7 +125,7 @@ export function TypingArea({
     <div className="space-y-4">
       <div
         onClick={() => inputRef.current?.focus()}
-        className="bg-background border rounded-xl p-4 shadow-sm font-mono text-lg leading-relaxed"
+        className="bg-background border rounded-xl p-8 shadow-sm font-mono text-2xl leading-relaxed"
       >
         <pre className="whitespace-pre-wrap break-words">{renderedText}</pre>
       </div>

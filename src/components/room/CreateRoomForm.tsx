@@ -39,7 +39,7 @@ export function CreateRoomForm() {
       const room = await createRoom({ maxPlayers, creatorName });
 
       localStorage.setItem("roomCode", room.code);
-      localStorage.setItem("playerId", room.createdBy.id);
+      localStorage.setItem("playerId", room.createdBy?.id ?? "");
 
       navigate(`/room/${room.code}`);
     } catch (err) {
