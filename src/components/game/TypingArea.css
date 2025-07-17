@@ -1,0 +1,23 @@
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.incorrect-word {
+  display: inline-block;
+}
+
+.curson {
+  display: inline-block;
+  white-space: pre;
+}
+
+.cursor-blink {
+  animation: blink 1s infinite;
+  font-weight: bold;
+}

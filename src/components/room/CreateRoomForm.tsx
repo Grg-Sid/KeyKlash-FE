@@ -8,19 +8,13 @@ export function CreateRoomForm() {
   const navigate = useNavigate();
 
   const [creatorName, setCreatorName] = useState<string>("");
-  const [maxPlayers, setMaxPlayers] = useState<number>(10);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
 
-    if (name === "maxPlayers") {
-      const parsedValue = parseInt(value, 10);
-      if (!isNaN(parsedValue)) {
-        setMaxPlayers(parsedValue);
-      }
-    } else if (name === "creatorName") {
+    if (name === "creatorName") {
       setCreatorName(value);
     }
   };
@@ -29,14 +23,9 @@ export function CreateRoomForm() {
     e.preventDefault();
     setError(null);
 
-    if (maxPlayers < 2 || maxPlayers > 20) {
-      setError("Max players must be between 2 and 20");
-      return;
-    }
-
     try {
       setLoading(true);
-      const room = await createRoom({ maxPlayers, creatorName });
+      const room = await createRoom({ creatorName });
 
       localStorage.setItem("roomCode", room.code);
       localStorage.setItem("playerId", room.createdBy?.id ?? "");
@@ -52,16 +41,6 @@ export function CreateRoomForm() {
 
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
-      <Input
-        type="number"
-        placeholder="Max players"
-        name="maxPlayers"
-        min={2}
-        max={20}
-        value={maxPlayers}
-        onChange={handleChange}
-        disabled={loading}
-      />
       <Input
         type="text"
         placeholder="Name"

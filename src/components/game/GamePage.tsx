@@ -59,48 +59,57 @@ export default function GamePage() {
     [myPlayerId]
   );
 
-  // --- CHANGE: Conditionally connect to WebSocket only in multiplayer ---
   const { sendMessage } = useWebSocket(
     roomCode ? roomData?.id || null : null,
     handleMessage
   );
 
-  const { myWpm, myAccuracy, myPosition } = useMemo(() => {
+  const { myWpm, myRawWpm, myAccuracy, myPosition } = useMemo(() => {
     if (!gameStartTimeRef.current || !roomData?.text) {
-      return { myWpm: 0, myAccuracy: 100, myPosition: 0 };
+      return { myWpm: 0, myRawWpm: 0, myAccuracy: 100, myPosition: 0 };
     }
     const fullText = roomData.text;
-
-    let position = 0;
-    for (let i = 0; i < myTypedText.length; i++) {
-      if (myTypedText[i] !== fullText[i]) {
-        break;
-      }
-      position = i + 1;
-    }
-
     const elapsedTimeInSeconds = (Date.now() - gameStartTimeRef.current) / 1000;
-    const typedWords = position / 5;
-    const wpm =
-      elapsedTimeInSeconds > 0
-        ? Math.round((typedWords / elapsedTimeInSeconds) * 60)
-        : 0;
 
+    let correctCharCount = 0;
     let errors = 0;
+
     for (let i = 0; i < myTypedText.length; i++) {
-      if (myTypedText[i] !== fullText[i]) {
+      if (myTypedText[i] === fullText[i]) {
+        correctCharCount++;
+      } else {
         errors++;
       }
     }
+
+    const rawCharCount = myTypedText.length;
+    const wpm =
+      elapsedTimeInSeconds > 0
+        ? Math.round((correctCharCount / 5 / elapsedTimeInSeconds) * 60)
+        : 0;
+
+    const rawWpm =
+      elapsedTimeInSeconds > 0
+        ? Math.round((rawCharCount / 5 / elapsedTimeInSeconds) * 60)
+        : 0;
+
     const accuracy =
-      myTypedText.length > 0
-        ? Math.max(
-            0,
-            ((myTypedText.length - errors) / myTypedText.length) * 100
-          )
+      rawCharCount > 0
+        ? Math.max(((rawCharCount - errors) / rawCharCount) * 100)
         : 100;
 
-    return { myWpm: wpm, myAccuracy: accuracy, myPosition: position };
+    let position = 0;
+    for (let i = 0; i < myTypedText.length; i++) {
+      if (myTypedText[i] !== fullText[i]) break;
+      position = i + 1;
+    }
+
+    return {
+      myWpm: wpm,
+      myAccuracy: accuracy,
+      myPosition: position,
+      myRawWpm: rawWpm,
+    };
   }, [myTypedText, roomData?.text]);
 
   const debouncedSendProgress = useDebouncedCallback(() => {
@@ -262,7 +271,6 @@ export default function GamePage() {
         isGameActive={isGameActive}
       />
 
-      {/* --- CHANGE: Only show player list in multiplayer mode --- */}
       {roomData.players.length > 1 && (
         <div>
           <h2 className="text-xl font-semibold mb-2">Players</h2>
