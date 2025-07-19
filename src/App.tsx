@@ -4,6 +4,7 @@ import HomePage from "./pages/HomePage";
 import GamePage from "./components/game/GamePage";
 import { CreateRoomForm } from "./components/room/CreateRoomForm";
 import RoomPage from "./pages/RoomPage";
+import { JoinRoomForm } from "./components/room/JoinRoomForm";
 
 function App() {
   return (
@@ -11,6 +12,7 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/create-room" element={<CreateRoomForm />} />
+        <Route path="/join-room" element={<JoinRoomForm />} />
         <Route path="/room/:roomCode" element={<RoomPage />} />
         <Route path="/room/:roomCode/game" element={<GamePage />} />
         <Route path="/room/game" element={<GamePage />} />

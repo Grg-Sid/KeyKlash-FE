@@ -3,7 +3,6 @@ import type { Room } from "../types/Room";
 import type { RoomJoinRequest } from "../types/RoomJoinRequest";
 import { api } from "./api";
 import type { Player } from "@/types/Player";
-import axios from "axios";
 
 export const helloWorld = async (): Promise<string> => {
   try {
@@ -85,17 +84,5 @@ export const startGame = async (roomId: string): Promise<Room> => {
   } catch (error) {
     console.error("Error starting game:", error);
     throw new Error("Failed to start game");
-  }
-};
-
-export const getText = async (): Promise<string> => {
-  const URL =
-    "https://api.quotable.kurokeita.dev/api/quotes/random?minLength=200&maxLength=400";
-  try {
-    const response = await axios.get(URL);
-    return response.data;
-  } catch (error) {
-    console.error("Error in getting the text", error);
-    throw new Error("Failed to get text");
   }
 };

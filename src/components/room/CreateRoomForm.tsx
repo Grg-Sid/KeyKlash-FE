@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createRoom } from "@/services/gameService";
+import { generateRandomWords } from "@/utils/wordGenerator";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -25,7 +26,8 @@ export function CreateRoomForm() {
 
     try {
       setLoading(true);
-      const room = await createRoom({ creatorName });
+      const text = generateRandomWords(200);
+      const room = await createRoom({ creatorName, text });
 
       localStorage.setItem("roomCode", room.code);
       localStorage.setItem("playerId", room.createdBy?.id ?? "");

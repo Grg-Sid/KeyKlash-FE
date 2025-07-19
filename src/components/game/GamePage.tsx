@@ -3,10 +3,24 @@ import type { GameMessage } from "@/types/GameMessage";
 import type { Room } from "@/types/Room";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
-import { getRoomByCode, getText } from "@/services/gameService";
+import { getRoomByCode } from "@/services/gameService";
 import { TypingArea, type PlayerCursor } from "./TypingArea";
 import { useParams } from "react-router-dom";
-import { getPlayerColor } from "@/utils";
+import { getPlayerColor } from "@/utils/getPlayerColor";
+import { generateRandomWords } from "@/utils/wordGenerator";
+import { GameSummary } from "./GameSummary";
+
+type GamePhase = "waiting" | "typing" | "finished";
+type GameResult = {
+  wpm: number;
+  rawWpm: number;
+  accuracy: number;
+  correctChars: number;
+  incorrectChars: number;
+  totalChars: number;
+};
+
+const TIME_OPTIONS = [15, 30, 60, 120];
 
 type PlayerProgressPayload = {
   playerId: string;
@@ -30,14 +44,26 @@ export default function GamePage() {
   const [roomData, setRoomData] = useState<Room | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState<number | null>(null);
   const [myTypedText, setMyTypedText] = useState<string>("");
 
-  const gameStartTimeRef = useRef<number | null>(null);
+  const myTypedTextRef = useRef(myTypedText);
+  useEffect(() => {
+    myTypedTextRef.current = myTypedText;
+  }, [myTypedText]);
+
+  const [gamePhase, setGamePhase] = useState<GamePhase>("waiting");
+  const [testDuration, setTestDuration] = useState<number>(30);
+  const [timeLeft, setTimeLeft] = useState<number>(30);
+  const [gameResult, setGameResult] = useState<GameResult | null>(null);
+
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const typingAreaInputRef = useRef<HTMLInputElement | null>(null);
+  const isInitialMount = useRef(true);
+
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   const handleMessage = useCallback(
     (message: GameMessage) => {
-      // This logic is only relevant for multiplayer
       if (message.type === "ROOM_UPDATE" || message.type === "GAME_STARTED") {
         setRoomData(message.payload as Room);
       } else if (message.type === "PLAYER_PROGRESS") {
@@ -64,117 +90,152 @@ export default function GamePage() {
     handleMessage
   );
 
-  const { myWpm, myRawWpm, myAccuracy, myPosition } = useMemo(() => {
-    if (!gameStartTimeRef.current || !roomData?.text) {
-      return { myWpm: 0, myRawWpm: 0, myAccuracy: 100, myPosition: 0 };
-    }
-    const fullText = roomData.text;
-    const elapsedTimeInSeconds = (Date.now() - gameStartTimeRef.current) / 1000;
+  const calculateResults = useCallback(() => {
+    const elapsedTimeInMinutes = testDuration / 60;
+    const typedText = myTypedTextRef.current;
+    const fullText = roomData?.text || "";
 
-    let correctCharCount = 0;
-    let errors = 0;
+    let correctChars = 0;
+    let incorrectChars = 0;
 
-    for (let i = 0; i < myTypedText.length; i++) {
-      if (myTypedText[i] === fullText[i]) {
-        correctCharCount++;
+    for (let i = 0; i < typedText.length; i++) {
+      if (i < fullText.length) {
+        if (typedText[i] === fullText[i]) {
+          correctChars++;
+        } else {
+          incorrectChars++;
+        }
       } else {
-        errors++;
+        incorrectChars++;
       }
     }
 
-    const rawCharCount = myTypedText.length;
-    const wpm =
-      elapsedTimeInSeconds > 0
-        ? Math.round((correctCharCount / 5 / elapsedTimeInSeconds) * 60)
-        : 0;
-
-    const rawWpm =
-      elapsedTimeInSeconds > 0
-        ? Math.round((rawCharCount / 5 / elapsedTimeInSeconds) * 60)
-        : 0;
-
+    const totalChars = typedText.length;
+    const wpm = Math.round(correctChars / 5 / elapsedTimeInMinutes);
+    const rawWpm = Math.round(totalChars / 5 / elapsedTimeInMinutes);
     const accuracy =
-      rawCharCount > 0
-        ? Math.max(((rawCharCount - errors) / rawCharCount) * 100)
+      totalChars > 0
+        ? Math.max(0, ((totalChars - incorrectChars) / totalChars) * 100)
         : 100;
 
-    let position = 0;
-    for (let i = 0; i < myTypedText.length; i++) {
-      if (myTypedText[i] !== fullText[i]) break;
-      position = i + 1;
+    return { wpm, rawWpm, accuracy, correctChars, incorrectChars, totalChars };
+  }, [roomData?.text, testDuration]);
+
+  const endGame = useCallback(() => {
+    if (gamePhase === "finished") return;
+    setGamePhase("finished");
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    const results = calculateResults();
+    setGameResult(results);
+  }, [gamePhase, calculateResults]);
+
+  const restartGame = useCallback(() => {
+    setGamePhase("waiting");
+    setMyTypedText("");
+    setGameResult(null);
+    setTimeLeft(testDuration);
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
     }
 
-    return {
-      myWpm: wpm,
-      myAccuracy: accuracy,
-      myPosition: position,
-      myRawWpm: rawWpm,
+    if (!roomCode) {
+      const newText = generateRandomWords(200);
+      setRoomData((prev) => (prev ? { ...prev, text: newText } : null));
+    }
+    typingAreaInputRef.current?.focus();
+  }, [testDuration, roomCode]);
+
+  const handleDurationChange = (duration: number) => {
+    setTestDuration(duration);
+  };
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    restartGame();
+  }, [testDuration, restartGame]);
+
+  useEffect(() => {
+    if (gamePhase === "typing") {
+      timerIntervalRef.current = setInterval(() => {
+        setTimeLeft((prevTime) => {
+          if (prevTime <= 1) {
+            clearInterval(timerIntervalRef.current!);
+            endGame();
+            return 0;
+          }
+          return prevTime - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
     };
-  }, [myTypedText, roomData?.text]);
+  }, [gamePhase, endGame]);
 
   const debouncedSendProgress = useDebouncedCallback(() => {
-    // --- CHANGE: Only send progress in multiplayer mode ---
     if (!roomCode || !roomData || !myPlayerId) return;
+    // TODO: Calculate real-time stats before sending
+    const myPosition = myTypedText.length;
 
     sendMessage("/app/game/progress", {
       roomId: roomData.id,
       playerId: myPlayerId,
       currentPosition: myPosition,
-      wpm: myWpm,
-      accuracy: myAccuracy,
+      // wpm: myWpm,
+      // accuracy: myAccuracy,
     });
   }, 200);
 
   const handleOnType = useCallback(
     (_newPosition: number, newTypedText: string) => {
-      setMyTypedText(newTypedText);
-
-      if (gameStartTimeRef.current === null && !roomCode) {
-        gameStartTimeRef.current = Date.now();
+      if (gamePhase === "finished") return;
+      if (gamePhase === "waiting" && (countdown === 0 || countdown === null)) {
+        setGamePhase("typing");
       }
+      setMyTypedText(newTypedText);
       debouncedSendProgress();
     },
-    [debouncedSendProgress, roomCode]
+    [debouncedSendProgress, countdown, gamePhase]
   );
 
   useEffect(() => {
     setLoading(true);
     if (roomCode) {
-      // Multiplayer Mode
       getRoomByCode(roomCode)
         .then((data) => setRoomData(data))
         .catch(() => setError("Failed to load game room."))
         .finally(() => setLoading(false));
     } else {
-      // Single-Player Mode: Create a local, mock room object
-      (async () => {
-        const quote = await getText();
-        const text = quote.quote.content;
-        const singlePlayerRoom: Room = {
-          id: "single-player",
-          code: "Single Player",
-          gameState: "IN_PROGRESS", // Start the game immediately
-          text,
-          gameStartedAt: new Date(),
-          players: [
-            {
-              id: myPlayerId,
-              nickname: "You",
-              wpm: 0,
-              accuracy: 100,
-              currentPosition: 0,
-              roomId: "",
-              isFinished: false,
-              joinedAt: "",
-            },
-          ],
-          createdAt: undefined,
-          maxPlayers: 0,
-          createdBy: undefined,
-        };
-        setRoomData(singlePlayerRoom);
-        setLoading(false);
-      })();
+      const text = generateRandomWords(200);
+      const singlePlayerRoom: Room = {
+        id: "single-player",
+        code: "Single Player",
+        gameState: "IN_PROGRESS",
+        text,
+        gameStartedAt: new Date(),
+        players: [
+          {
+            id: myPlayerId,
+            nickname: "You",
+            wpm: 0,
+            accuracy: 100,
+            currentPosition: 0,
+            roomId: "",
+            isFinished: false,
+            joinedAt: "",
+          },
+        ],
+        createdAt: undefined,
+        maxPlayers: 0,
+        createdBy: undefined,
+      };
+      setRoomData(singlePlayerRoom);
+      setLoading(false);
     }
   }, [roomCode, myPlayerId]);
 
@@ -197,7 +258,6 @@ export default function GamePage() {
         if (timeLeft <= 0) {
           clearInterval(interval);
           setCountdown(0);
-          gameStartTimeRef.current = gameReadyTime;
         } else {
           setCountdown(Math.ceil(timeLeft / 1000));
         }
@@ -225,8 +285,6 @@ export default function GamePage() {
     [otherPlayers]
   );
 
-  const isGameActive = countdown === 0;
-
   if (loading) return <div className="p-4">Loading game...</div>;
   if (error) return <div className="p-4 text-red-500">Error: {error}</div>;
   if (!roomData || !me)
@@ -242,34 +300,59 @@ export default function GamePage() {
           </div>
         </div>
       )}
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">
-          {roomCode ? `Room: ${roomData.code}` : "Single Player"}
-        </h1>
-        {roomCode && (
-          <div className="text-lg font-semibold">{roomData.gameState}</div>
-        )}
-      </div>
 
-      <div className="grid grid-cols-2 gap-4 text-center">
-        <div className="p-4 bg-card rounded-lg shadow">
-          <div className="text-sm text-muted-foreground">WPM</div>
-          <div className="text-3xl font-bold">{myWpm}</div>
-        </div>
-        <div className="p-4 bg-card rounded-lg shadow">
-          <div className="text-sm text-muted-foreground">Accuracy</div>
-          <div className="text-3xl font-bold">{myAccuracy.toFixed(1)}%</div>
-        </div>
-      </div>
+      <h1 className="text-2xl font-bold">
+        {roomCode ? `Room: ${roomData.code}` : "Timed Typing Test"}
+      </h1>
 
-      <TypingArea
-        text={roomData.text}
-        myPosition={myPosition}
-        myTypedText={myTypedText}
-        onType={handleOnType}
-        playerCursors={playerCursors}
-        isGameActive={isGameActive}
-      />
+      {gamePhase === "finished" && gameResult ? (
+        <GameSummary results={gameResult} onRestart={restartGame} />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-4 text-center">
+            <div className="p-4 bg-card rounded-lg shadow">
+              <div className="text-sm text-muted-foreground">Time Left</div>
+              <div className="text-3xl font-bold">{timeLeft}s</div>
+            </div>
+            {gamePhase === "waiting" && !roomCode && (
+              <div className="p-4 bg-card rounded-lg shadow">
+                <div className="text-sm text-muted-foreground mb-2">
+                  Duration
+                </div>
+                <div className="flex gap-2 justify-center">
+                  {TIME_OPTIONS.map((time) => (
+                    <button
+                      key={time}
+                      onClick={() => handleDurationChange(time)}
+                      className={`px-3 py-1 rounded-md text-sm font-semibold transition-colors ${
+                        testDuration === time
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted hover:bg-muted/80"
+                      }`}
+                    >
+                      {time}s
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <TypingArea
+            text={roomData.text}
+            myTypedText={myTypedText}
+            onType={handleOnType}
+            isGameActive={
+              gamePhase === "typing" ||
+              (gamePhase === "waiting" &&
+                (countdown === 0 || countdown === null))
+            }
+            playerCursors={playerCursors}
+            onMount={(ref) => (typingAreaInputRef.current = ref.current)}
+            myPosition={myTypedText.length}
+          />
+        </>
+      )}
 
       {roomData.players.length > 1 && (
         <div>
