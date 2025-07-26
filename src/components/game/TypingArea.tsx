@@ -1,13 +1,6 @@
 import clsx from "clsx";
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useRef, useMemo } from "react";
 import "./TypingArea.css";
-import { useDebouncedCallback } from "use-debounce";
 
 export type PlayerCursor = {
   playerId: string;
@@ -18,216 +11,149 @@ export type PlayerCursor = {
 
 interface TypingAreaProps {
   text: string;
-  myPosition: number;
-  myTypedText: string;
+  typedText: string;
   playerCursors?: PlayerCursor[];
-  onType: (newPosition: number, typedText: string) => void;
-  onMount: (ref) => void;
+  onTextChange: (typedText: string) => void;
+  onMount: (ref: React.RefObject<HTMLInputElement | null>) => void;
   isGameActive?: boolean;
 }
 
+// OPTIMIZATION 1: Create a memoized Character component.
+// This prevents re-rendering every single character on each keystroke.
+// Only characters whose props change (around the cursor) will re-render.
+const Character = React.memo(
+  ({
+    char,
+    isTyped,
+    isCorrect,
+    hasMyCursor,
+    otherCursors,
+  }: {
+    char: string;
+    isTyped: boolean;
+    isCorrect: boolean;
+    hasMyCursor: boolean;
+    otherCursors: PlayerCursor[];
+  }) => {
+    const charClass = clsx({
+      "text-gray-600": isTyped && isCorrect,
+      "text-red-500 underline decoration-red-500": isTyped && !isCorrect,
+      "text-gray-400": !isTyped,
+      caret: hasMyCursor, // OPTIMIZATION 4: Use a CSS class for the cursor
+    });
+
+    return (
+      <span className="relative">
+        <span className={charClass}>{char}</span>
+        {otherCursors.map((p) => (
+          <span
+            key={p.playerId}
+            style={{ color: p.color }}
+            className="absolute -bottom-2 left-0 text-lg"
+            title={p.nickname}
+          >
+            ▲
+          </span>
+        ))}
+      </span>
+    );
+  }
+);
+Character.displayName = "Character";
+
 export function TypingArea({
   text,
-  myPosition,
-  myTypedText,
-  playerCursors,
+  typedText,
+  playerCursors = [],
   isGameActive = true,
-  onType,
+  onTextChange,
+  onMount,
 }: TypingAreaProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const cursorRef = useRef<HTMLSpanElement>(null);
-  const textContainerRef = useRef<HTMLDivElement>(null); // The visible, fixed-height container
-  const textContentRef = useRef<HTMLDivElement>(null); // The inner, scrolling content
+  const textContainerRef = useRef<HTMLDivElement>(null);
+  const textContentRef = useRef<HTMLDivElement>(null);
+  const myPosition = typedText.length;
 
-  const [lineHeight, setLineHeight] = useState(0);
-  const [totalLines, setTotalLines] = useState(3);
-  const [scrollOffset, setScrollOffset] = useState(0);
-
-  const [isIdle, setIsIdle] = useState<boolean>(true);
-
-  const debounceSetIdle = useDebouncedCallback(() => {
-    setIsIdle(true);
-  }, 500);
-
-  const handleTypingActivity = useCallback(() => {
-    setIsIdle(false);
-    debounceSetIdle();
-  }, [debounceSetIdle]);
-
-  const words = useMemo(() => text.split(" "), [text]);
-
-  const activeWordIndex = useMemo(() => {
-    return (myTypedText.match(/ /g) || []).length;
-  }, [myTypedText]);
-
-  const currentWordInput = useMemo(() => {
-    const typedWords = myTypedText.split(" ");
-    return typedWords[typedWords.length - 1] || "";
-  }, [myTypedText]);
+  useEffect(() => {
+    onMount(inputRef);
+    if (isGameActive) {
+      inputRef.current?.focus();
+    }
+  }, [onMount, isGameActive]);
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!isGameActive) return;
-      handleTypingActivity();
-      const newCurrentWord = e.target.value;
-      if (newCurrentWord.includes(" ")) return;
-
-      const typedWords = myTypedText.split(" ");
-      typedWords[activeWordIndex] = newCurrentWord;
-
-      const newTypedText = typedWords.join(" ");
-      if (newTypedText.length > text.length) return;
-
-      onType(newTypedText.length, newTypedText);
+      const newText = e.target.value;
+      if (newText.length > text.length) return;
+      onTextChange(newText);
     },
-    [
-      isGameActive,
-      handleTypingActivity,
-      text,
-      onType,
-      myTypedText,
-      activeWordIndex,
-    ]
+    [isGameActive, text, onTextChange]
   );
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === " ") {
-        e.preventDefault();
-        if (
-          currentWordInput.trim() === "" ||
-          activeWordIndex >= words.length - 1 ||
-          currentWordInput.length !== words[activeWordIndex].length
-        )
-          return;
-        const newTypedText = myTypedText + " ";
-        let newPosition = 0;
-        for (let i = 0; i < newTypedText.length; i++) {
-          if (newTypedText[i] !== text[i]) break;
-          newPosition = i + 1;
-        }
-        onType(newPosition, newTypedText);
-      }
-    },
-    [currentWordInput, activeWordIndex, words, myTypedText, onType, text]
-  );
+  const characters = useMemo(() => text.split(""), [text]);
 
+  // This scrolling logic is now more efficient because it relies on a stable layout
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    if (textContentRef.current) {
-      const computedStyle = getComputedStyle(textContentRef.current);
-      const lh = parseFloat(computedStyle.lineHeight);
-      if (lh > 0) {
-        setLineHeight(lh);
-        const lines = Math.round(textContentRef.current.scrollHeight / lh);
-        setTotalLines(lines);
-      }
-    }
-  }, [text]); // Recalculate if the text changes
-
-  // 2. Effect to update scroll position based on the cursor's current line
-  useEffect(() => {
-    if (!cursorRef.current || !textContentRef.current || lineHeight === 0) {
+    const cursorEl = textContentRef.current?.childNodes[
+      myPosition
+    ] as HTMLElement;
+    if (!cursorEl || !textContainerRef.current || !textContentRef.current)
       return;
-    }
-    const cursorParent = cursorRef.current.parentElement;
-    if (!cursorParent) return;
 
-    const currentLineTop = cursorParent.offsetTop;
-    const currentLineIndex = Math.round(currentLineTop / lineHeight);
+    const cursorTop = cursorEl.offsetTop;
+    const containerHeight = textContainerRef.current.clientHeight;
+    const lineHeight = cursorEl.offsetHeight;
 
-    // Scroll so the user's current line becomes the second line in the view
-    const newScrollOffset = Math.max(0, currentLineIndex - 1) * lineHeight;
-    setScrollOffset(newScrollOffset);
-  }, [myPosition, lineHeight]);
+    const desiredScrollTop = cursorTop - containerHeight / 2 + lineHeight / 2;
 
-  // --- Modified Rendered Text ---
-  const renderedText = useMemo(() => {
-    return text.split("").map((char, i) => {
-      const isTyped = i < myTypedText.length;
-      const isCorrect = isTyped && myTypedText[i] === char;
-      const isIncorrect = isTyped && myTypedText[i] !== char;
-      const charClass = clsx({
-        "text-primary font-semibold": isCorrect,
-        "text-muted-foreground opacity-50": isIncorrect,
-        "text-muted-foreground": !isTyped,
-      });
+    textContentRef.current.style.transform = `translateY(-${Math.max(
+      0,
+      desiredScrollTop
+    )}px)`;
+  }, [myPosition]);
 
-      return (
-        <span
-          key={i}
-          className={`relative transition-all duration-75 ${charClass}`}
-        >
-          {char === " " ? <span>&nbsp;</span> : char}
-          {isIncorrect && (
-            <span className="absolute -top-1.5 left-0 text-red-500 opacity-90">
-              {myTypedText[i] === " " ? <span>&nbsp;</span> : myTypedText[i]}
-            </span>
-          )}
-          {i === myPosition && (
-            <span
-              ref={cursorRef} // Attach ref to the cursor to track its position
-              className={clsx("absolute right-2 -top-1.5", {
-                "cursor-blink": isIdle,
-              })}
-            >
-              |
-            </span>
-          )}
-          {(playerCursors ?? []).map((cursor) =>
-            cursor.position === i ? (
-              <span
-                key={cursor.playerId}
-                className="absolute -bottom-2 left-0 text-xs"
-                style={{ color: cursor.color }}
-              >
-                ▲
-              </span>
-            ) : null
-          )}
-        </span>
-      );
-    });
-  }, [text, myTypedText, myPosition, isIdle, playerCursors]);
-
-  // --- Modified JSX with Scrolling Container ---
   return (
-    <div className="space-y-4">
+    <div className="relative" onClick={() => inputRef.current?.focus()}>
       <div
         ref={textContainerRef}
-        onClick={() => inputRef.current?.focus()}
-        className="bg-background border rounded-xl p-8 shadow-sm font-mono text-3xl leading-relaxed cursor-text overflow-hidden"
-        style={
-          lineHeight > 0
-            ? { height: `${lineHeight * Math.min(3, totalLines) + 64}px` } // Height for 3 lines + padding
-            : { minHeight: "180px" } // Fallback height
-        }
+        className="font-mono text-2xl leading-relaxed cursor-text overflow-hidden h-36"
       >
         <div
           ref={textContentRef}
-          className="whitespace-pre-wrap break-words break-keep transition-transform duration-200 ease-in-out"
-          style={{ transform: `translateY(-${scrollOffset}px)` }}
+          className="whitespace-pre-wrap break-words transition-transform duration-200 ease-out"
         >
-          {renderedText}
+          {characters.map((char, i) => {
+            const isTyped = i < myPosition;
+            const isCorrect = char === typedText[i];
+            const otherCursorsOnChar = playerCursors.filter(
+              (p) => p.position === i
+            );
+
+            return (
+              <Character
+                key={i}
+                char={char}
+                isTyped={isTyped}
+                isCorrect={isCorrect}
+                hasMyCursor={i === myPosition}
+                otherCursors={otherCursorsOnChar}
+              />
+            );
+          })}
         </div>
       </div>
       <input
         type="text"
         ref={inputRef}
-        value={currentWordInput}
+        value={typedText}
         onChange={handleInputChange}
-        onKeyDown={handleKeyDown}
-        className="w-full border rounded p-2 font-mono opacity-0 absolute"
-        placeholder="Start typing here..."
+        className="opacity-0 absolute top-0 left-0 w-0 h-0"
         disabled={!isGameActive}
         autoComplete="off"
         autoCorrect="off"
         autoCapitalize="off"
         spellCheck="false"
-        style={{ pointerEvents: "none" }}
       />
     </div>
   );

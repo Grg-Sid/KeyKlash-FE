@@ -9,6 +9,9 @@ import { useParams } from "react-router-dom";
 import { getPlayerColor } from "@/utils/getPlayerColor";
 import { generateRandomWords } from "@/utils/wordGenerator";
 import { GameSummary } from "./GameSummary";
+import type { GameMode } from "@/hooks/useTypingGame";
+import { GlobeIcon, RefreshCwIcon } from "@/assets/icons";
+import { SettingsDashboard } from "./SettingsDashboard";
 
 type GamePhase = "waiting" | "typing" | "finished";
 type GameResult = {
@@ -19,8 +22,6 @@ type GameResult = {
   incorrectChars: number;
   totalChars: number;
 };
-
-const TIME_OPTIONS = [15, 30, 60, 120];
 
 type PlayerProgressPayload = {
   playerId: string;
@@ -52,9 +53,13 @@ export default function GamePage() {
   }, [myTypedText]);
 
   const [gamePhase, setGamePhase] = useState<GamePhase>("waiting");
+  const [gameMode, setGameMode] = useState<GameMode>("time");
   const [testDuration, setTestDuration] = useState<number>(30);
   const [timeLeft, setTimeLeft] = useState<number>(30);
+  const [wordCount, setWordCount] = useState<number>(25);
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
+
+  const gameStartTimeRef = useRef<number | null>(null);
 
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const typingAreaInputRef = useRef<HTMLInputElement | null>(null);
@@ -91,9 +96,17 @@ export default function GamePage() {
   );
 
   const calculateResults = useCallback(() => {
-    const elapsedTimeInMinutes = testDuration / 60;
     const typedText = myTypedTextRef.current;
     const fullText = roomData?.text || "";
+
+    let elapsedTimeInMinutes: number = 0;
+    if (gameMode === "time") {
+      elapsedTimeInMinutes = testDuration / 60;
+    } else if (gameMode === "words") {
+      const endTime = Date.now();
+      const startTime = gameStartTimeRef.current ?? endTime - 1000;
+      elapsedTimeInMinutes = (endTime - startTime) / 60000;
+    }
 
     let correctChars = 0;
     let incorrectChars = 0;
@@ -129,24 +142,56 @@ export default function GamePage() {
     setGameResult(results);
   }, [gamePhase, calculateResults]);
 
+  useEffect(() => {
+    if (
+      myTypedText.length === 1 &&
+      gamePhase === "waiting" &&
+      (countdown === 0 || countdown === null)
+    ) {
+      setGamePhase("typing");
+      if (gameMode === "words") {
+        gameStartTimeRef.current = Date.now();
+      }
+    }
+    if (
+      gameMode === "words" &&
+      myTypedText.length > 0 &&
+      myTypedText.length === roomData?.text.length
+    ) {
+      endGame();
+    }
+  }, [myTypedText, gamePhase, countdown, gameMode, roomData?.text, endGame]);
+
   const restartGame = useCallback(() => {
     setGamePhase("waiting");
     setMyTypedText("");
+    myTypedTextRef.current = "";
     setGameResult(null);
     setTimeLeft(testDuration);
+    gameStartTimeRef.current = null;
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
     }
 
     if (!roomCode) {
-      const newText = generateRandomWords(200);
+      const newWordCount = gameMode === "words" ? wordCount : 200;
+      const newText = generateRandomWords(newWordCount);
       setRoomData((prev) => (prev ? { ...prev, text: newText } : null));
     }
     typingAreaInputRef.current?.focus();
-  }, [testDuration, roomCode]);
+  }, [testDuration, roomCode, gameMode, wordCount]);
 
   const handleDurationChange = (duration: number) => {
+    setGameMode("time");
     setTestDuration(duration);
+    setTimeLeft(duration);
+  };
+
+  const handleWordCountChange = (count: number) => {
+    setGameMode("words");
+    setWordCount(count);
+    // setTestDuration(999);
+    // setTimeLeft(999);
   };
 
   useEffect(() => {
@@ -154,11 +199,17 @@ export default function GamePage() {
       isInitialMount.current = false;
       return;
     }
-    restartGame();
-  }, [testDuration, restartGame]);
+    if (!roomCode) {
+      if (gameMode === "time") {
+        restartGame();
+      } else if (gameMode === "words") {
+        restartGame();
+      }
+    }
+  }, [testDuration, gameMode, roomCode, wordCount]);
 
   useEffect(() => {
-    if (gamePhase === "typing") {
+    if (gamePhase === "typing" && gameMode === "time") {
       timerIntervalRef.current = setInterval(() => {
         setTimeLeft((prevTime) => {
           if (prevTime <= 1) {
@@ -175,32 +226,24 @@ export default function GamePage() {
         clearInterval(timerIntervalRef.current);
       }
     };
-  }, [gamePhase, endGame]);
+  }, [gamePhase, endGame, gameMode]);
 
   const debouncedSendProgress = useDebouncedCallback(() => {
     if (!roomCode || !roomData || !myPlayerId) return;
-    // TODO: Calculate real-time stats before sending
-    const myPosition = myTypedText.length;
 
     sendMessage("/app/game/progress", {
       roomId: roomData.id,
       playerId: myPlayerId,
-      currentPosition: myPosition,
-      // wpm: myWpm,
-      // accuracy: myAccuracy,
+      currentPosition: myTypedTextRef.current.length,
     });
   }, 200);
 
   const handleOnType = useCallback(
-    (_newPosition: number, newTypedText: string) => {
-      if (gamePhase === "finished") return;
-      if (gamePhase === "waiting" && (countdown === 0 || countdown === null)) {
-        setGamePhase("typing");
-      }
+    (newTypedText: string) => {
       setMyTypedText(newTypedText);
       debouncedSendProgress();
     },
-    [debouncedSendProgress, countdown, gamePhase]
+    [debouncedSendProgress]
   );
 
   useEffect(() => {
@@ -267,7 +310,7 @@ export default function GamePage() {
     }
   }, [roomData?.gameState, roomData?.gameStartedAt, roomCode]);
 
-  const { me, otherPlayers } = useMemo(() => {
+  const { otherPlayers } = useMemo(() => {
     const me = roomData?.players.find((p) => p.id === myPlayerId) || null;
     const otherPlayers =
       roomData?.players.filter((p) => p.id !== myPlayerId) || [];
@@ -287,108 +330,139 @@ export default function GamePage() {
 
   if (loading) return <div className="p-4">Loading game...</div>;
   if (error) return <div className="p-4 text-red-500">Error: {error}</div>;
-  if (!roomData || !me)
+  if (!roomData)
     return <div className="p-4">Could not find game data for you.</div>;
 
   return (
-    <div className="container mx-auto p-4 space-y-6 relative">
-      {countdown !== null && countdown > 0 && (
-        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex justify-center items-center z-50 rounded-lg">
-          <div className="text-center">
-            <p className="text-lg text-muted-foreground">Game starts in...</p>
-            <p className="text-9xl font-bold text-primary">{countdown}</p>
-          </div>
-        </div>
-      )}
+    <div className="bg-[#f0f0f0] min-h-screen text-[#333] flex flex-col font-sans">
+      {/* TODO */}
+      <header className="px-12 py-3">{/* Header Content */}</header>
 
-      <h1 className="text-2xl font-bold">
-        {roomCode ? `Room: ${roomData.code}` : "Timed Typing Test"}
-      </h1>
-
-      {gamePhase === "finished" && gameResult ? (
-        <GameSummary results={gameResult} onRestart={restartGame} />
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-4 text-center">
-            <div className="p-4 bg-card rounded-lg shadow">
-              <div className="text-sm text-muted-foreground">Time Left</div>
-              <div className="text-3xl font-bold">{timeLeft}s</div>
+      <main className="flex-grow flex flex-col items-center justify-center -mt-16 px-4">
+        <div className="w-full max-w-5xl flex flex-col items-center">
+          {countdown !== null && countdown > 0 && (
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex justify-center items-center z-50">
+              <p className="text-9xl font-bold text-cyan-500 animate-pulse">
+                {countdown}
+              </p>
             </div>
-            {gamePhase === "waiting" && !roomCode && (
-              <div className="p-4 bg-card rounded-lg shadow">
-                <div className="text-sm text-muted-foreground mb-2">
-                  Duration
-                </div>
-                <div className="flex gap-2 justify-center">
-                  {TIME_OPTIONS.map((time) => (
-                    <button
-                      key={time}
-                      onClick={() => handleDurationChange(time)}
-                      className={`px-3 py-1 rounded-md text-sm font-semibold transition-colors ${
-                        testDuration === time
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted hover:bg-muted/80"
-                      }`}
-                    >
-                      {time}s
-                    </button>
-                  ))}
+          )}
+
+          {gamePhase === "finished" && gameResult ? (
+            <GameSummary
+              results={gameResult}
+              onRestart={() => {
+                if (gameMode === "time") {
+                  restartGame();
+                } else if (gameMode === "words") {
+                  restartGame();
+                }
+              }}
+            />
+          ) : (
+            <>
+              <SettingsDashboard
+                gameMode={gameMode}
+                setGameMode={setGameMode}
+                testDuration={testDuration}
+                onDurationChange={handleDurationChange}
+                onWordCountChange={handleWordCountChange}
+                wordCount={wordCount}
+              />
+              <div className="my-8 text-center h-12 flex items-center">
+                {gameMode === "time" && (
+                  <div className="text-cyan-500 text-4xl font-bold">
+                    {timeLeft}
+                  </div>
+                )}
+              </div>
+              <div className="w-full relative">
+                <TypingArea
+                  text={roomData.text}
+                  typedText={myTypedText}
+                  onTextChange={handleOnType}
+                  isGameActive={
+                    gamePhase !== "finished" &&
+                    (countdown === 0 || countdown === null)
+                  }
+                  playerCursors={playerCursors}
+                  onMount={(ref) => (typingAreaInputRef.current = ref.current)}
+                />
+              </div>
+              <div className="mt-8 flex items-center gap-4">
+                <button
+                  onClick={() => {
+                    if (gameMode === "time") {
+                      restartGame();
+                    } else if (gameMode === "words") {
+                      restartGame();
+                    }
+                  }}
+                  className="text-gray-400 hover:text-cyan-500 transition-colors p-2 rounded-full hover:bg-white"
+                >
+                  <RefreshCwIcon />
+                </button>
+                <div className="p-2 rounded-full bg-white text-gray-400 flex items-center gap-2 text-sm">
+                  <GlobeIcon /> english
                 </div>
               </div>
-            )}
-          </div>
+            </>
+          )}
 
-          <TypingArea
-            text={roomData.text}
-            myTypedText={myTypedText}
-            onType={handleOnType}
-            isGameActive={
-              gamePhase === "typing" ||
-              (gamePhase === "waiting" &&
-                (countdown === 0 || countdown === null))
-            }
-            playerCursors={playerCursors}
-            onMount={(ref) => (typingAreaInputRef.current = ref.current)}
-            myPosition={myTypedText.length}
-          />
-        </>
-      )}
-
-      {roomData.players.length > 1 && (
-        <div>
-          <h2 className="text-xl font-semibold mb-2">Players</h2>
-          <ul className="space-y-2">
-            {roomData.players.map((player) => (
-              <li key={player.id} className="p-3 bg-card rounded-lg shadow-sm">
-                <div className="flex justify-between items-center">
-                  <span
-                    className="font-bold"
-                    style={{ color: getPlayerColor(player.id) }}
+          {roomData.players.length > 1 && gamePhase !== "finished" && (
+            <div className="w-full mt-12">
+              <h2 className="text-xl font-semibold mb-2 text-gray-500">
+                Players
+              </h2>
+              <ul className="space-y-2">
+                {roomData.players.map((player) => (
+                  <li
+                    key={player.id}
+                    className="p-3 bg-white rounded-lg shadow-sm"
                   >
-                    {player.nickname} {player.id === myPlayerId && "(You)"}
-                  </span>
-                  <div className="text-sm space-x-4">
-                    <span>WPM: {player.wpm}</span>
-                    <span>Accuracy: {player.accuracy.toFixed(1)}%</span>
-                  </div>
-                </div>
-                <div className="w-full bg-muted rounded-full h-2.5 mt-2">
-                  <div
-                    className="h-2.5 rounded-full"
-                    style={{
-                      width: `${
-                        (player.currentPosition / roomData.text.length) * 100
-                      }%`,
-                      backgroundColor: getPlayerColor(player.id),
-                      transition: "width 0.2s ease-in-out",
-                    }}
-                  ></div>
-                </div>
-              </li>
-            ))}
-          </ul>
+                    <div className="flex justify-between items-center">
+                      <span
+                        className="font-bold"
+                        style={{ color: getPlayerColor(player.id) }}
+                      >
+                        {player.nickname} {player.id === myPlayerId && "(You)"}
+                      </span>
+                      <div className="text-sm space-x-4 text-gray-500">
+                        <span>
+                          WPM:{" "}
+                          <span className="font-semibold text-gray-700">
+                            {player.wpm}
+                          </span>
+                        </span>
+                        <span>
+                          Acc:{" "}
+                          <span className="font-semibold text-gray-700">
+                            {player.accuracy.toFixed(1)}%
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
+                      <div
+                        className="h-1.5 rounded-full"
+                        style={{
+                          width: `${
+                            (player.currentPosition /
+                              (roomData.text.length || 1)) *
+                            100
+                          }%`,
+                          backgroundColor: getPlayerColor(player.id),
+                          transition: "width 0.2s ease-in-out",
+                        }}
+                      ></div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
-      )}
+      </main>
     </div>
   );
 }

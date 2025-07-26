@@ -1,12 +1,12 @@
 import RoomInfoCard from "@/components/room/RoomInfoCard";
-import { Button } from "@/components/ui/button";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { getRoomByCode } from "@/services/gameService";
 import type { GameMessage } from "@/types/GameMessage";
 import type { Player } from "@/types/Player";
 import type { Room } from "@/types/Room";
+import { Loader2, WifiOff } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export default function RoomPage() {
   const navigate = useNavigate();
@@ -21,7 +21,7 @@ export default function RoomPage() {
     (message: GameMessage) => {
       if (message.type === "ROOM_UPDATE") {
         setRoomData(message.payload as Room);
-      } else if (message.type == "GAME_STARTED") {
+      } else if (message.type === "GAME_STARTED") {
         setRoomData(message.payload as Room);
         navigate(`/room/${(message.payload as Room).code}/game`);
       }
@@ -37,7 +37,7 @@ export default function RoomPage() {
   useEffect(() => {
     const roomCode = localStorage.getItem("roomCode");
     if (!roomCode) {
-      setError("Room code not found in local storage");
+      setError("No room found. Please create or join a new one.");
       setLoading(false);
       return;
     }
@@ -45,15 +45,13 @@ export default function RoomPage() {
     setLoading(true);
     getRoomByCode(roomCode)
       .then((data: Room) => {
-        setIsCreator(data.createdBy.id === myPlayerId);
+        setIsCreator(data.createdBy?.id === myPlayerId);
         setRoomData(data);
         setError(null);
       })
       .catch((err) => {
         console.error("Failed to fetch room data:", err);
-        setError(
-          "Failed to load room. The room may not exist or the server is down."
-        );
+        setError("Failed to load room. It may have expired or never existed.");
       })
       .finally(() => {
         setLoading(false);
@@ -61,73 +59,97 @@ export default function RoomPage() {
   }, [myPlayerId]);
 
   const handleStartGame = () => {
-    if (!isConnected) {
-      alert("Not connected to the server yet. Please wait.");
-      return;
-    }
-
-    if (!roomData || !myPlayerId) {
-      console.error("Cannot start game: Missing room or player data.");
-      return;
-    }
-
+    if (!isConnected || !roomData || !myPlayerId) return;
     sendMessage("/app/game/start", {
       roomId: roomData.id,
       playerId: myPlayerId,
     });
   };
 
-  if (loading) {
-    return <div>Loading room...</div>;
-  }
-
-  if (error) {
-    return <div className="text-red-500">Error: {error}</div>;
-  }
-
-  if (!roomData) {
-    return <div>Could not find room data.</div>;
-  }
-
   const waitingPlayer: Player = {
     id: "waiting",
-    nickname: "wating for players...",
+    nickname: "Waiting for players to join...",
     roomId: "",
     currentPosition: 0,
     wpm: 0,
     accuracy: 0,
     isFinished: false,
     joinedAt: new Date().toISOString(),
-    finishedAt: null,
-    sessionId: null,
   };
 
+  const getButtonState = () => {
+    if (!isConnected) {
+      return { text: "Connecting...", disabled: true };
+    }
+    if (roomData && roomData.players.length < 2) {
+      return { text: "Waiting for players...", disabled: true };
+    }
+    return { text: "Start Game", disabled: false };
+  };
+
+  const buttonState = getButtonState();
+
+  // --- Render Logic ---
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#f0f0f0] flex flex-col items-center justify-center text-gray-500">
+        <Loader2 className="animate-spin h-8 w-8 mb-4" />
+        <p className="text-lg">Loading Room...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#f0f0f0] flex flex-col items-center justify-center text-center p-4">
+        <div className="w-full max-w-md p-8 bg-white rounded-xl shadow-md space-y-4">
+          <h2 className="text-2xl font-bold text-red-600">Error</h2>
+          <p className="text-gray-600">{error}</p>
+          <Link to="/">
+            <button className="mt-4 w-full px-4 py-3 font-semibold text-white bg-cyan-500 rounded-lg hover:bg-cyan-600 transition-colors">
+              Back to Home
+            </button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!roomData) {
+    return null; // Should be covered by error state
+  }
+
   return (
-    <div className="space-y-4">
-      <RoomInfoCard
-        code={roomData.code}
-        players={
-          roomData.players.length > 0 ? roomData.players : [waitingPlayer]
-        }
-      />
-      {isCreator && (
-        <Button
-          onClick={handleStartGame}
-          disabled={!isConnected || roomData.players.length < 2}
-        >
-          {isConnected ? "Start Game" : "Connecting..."}
-        </Button>
-      )}
-      {!isConnected && (
-        <p className="text-sm text-muted-foreground">
-          Attempting to connect to the server...
-        </p>
-      )}
-      {roomData.players.length < 2 && (
-        <p className="text-sm text-muted-foreground">
-          You need at least 2 players to start.
-        </p>
-      )}
+    <div className="min-h-screen bg-[#f0f0f0] flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md space-y-6">
+        <RoomInfoCard
+          code={roomData.code}
+          players={
+            roomData.players.length > 0 ? roomData.players : [waitingPlayer]
+          }
+        />
+        {isCreator && (
+          <button
+            onClick={handleStartGame}
+            disabled={buttonState.disabled}
+            className="w-full px-4 py-3 text-lg font-semibold text-white bg-cyan-500 rounded-lg hover:bg-cyan-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          >
+            {buttonState.text}
+          </button>
+        )}
+        {!isCreator && (
+          <div className="p-4 text-center text-gray-500 bg-white rounded-lg shadow-md">
+            <p>Waiting for the host to start the game...</p>
+          </div>
+        )}
+        {!isConnected && (
+          <div className="flex items-center justify-center gap-2 text-sm text-yellow-600">
+            <WifiOff size={16} />
+            <span>Connection lost. Attempting to reconnect...</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

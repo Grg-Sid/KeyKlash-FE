@@ -1,5 +1,3 @@
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { joinRoom } from "@/services/gameService";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -11,61 +9,58 @@ export function JoinRoomForm() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    if (name === "nickname") {
-      setNickname(value);
-    } else if (name === "roomCode") {
-      setRoomCode(value);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError(null);
-    if (nickname === "" || roomCode === "") {
-      setError("Nickname or Roomcode can not be empty");
+    if (!nickname || !roomCode) {
+      setError("Nickname and Room Code are required.");
       return;
     }
-
+    setError(null);
     try {
       setLoading(true);
-      console.log("nickname", nickname);
-      console.log("roomCode", roomCode);
-      const player = await joinRoom({ nickname: nickname, roomCode: roomCode });
-
-      localStorage.setItem("roomCode", roomCode);
+      const player = await joinRoom({ nickname, roomCode });
       localStorage.setItem("playerId", player.id);
+      localStorage.setItem("roomCode", roomCode);
       navigate(`/room/${roomCode}`);
-    } catch (err) {
-      setError("Failed to join the room. Please check Room Code");
-      console.error("Create room error:", err);
+    } catch {
+      setError("Failed to join. Please check the room code.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div>
+    <div className="w-full max-w-sm p-8 space-y-6 bg-white rounded-xl shadow-md">
+      <h2 className="text-2xl font-bold text-center text-gray-800">
+        Join a Room
+      </h2>
       <form className="space-y-4" onSubmit={handleSubmit}>
-        <Input
+        <input
           type="text"
-          placeholder="Nickname"
+          placeholder="Enter your name"
           name="nickname"
           value={nickname}
-          onChange={handleChange}
+          onChange={(e) => setNickname(e.target.value)}
           disabled={loading}
+          className="w-full px-4 py-3 bg-gray-100 border-2 border-transparent rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-400 transition"
         />
-        <Input
+        <input
           type="text"
-          placeholder="Room Code"
+          placeholder="Enter room code"
           name="roomCode"
           value={roomCode}
-          onChange={handleChange}
+          onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
           disabled={loading}
+          className="w-full px-4 py-3 bg-gray-100 border-2 border-transparent rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-400 transition uppercase tracking-widest font-mono"
         />
-        {error && <p className="text-red-500 text-sm">{error}</p>}
-        <Button type="submit">Join Room</Button>
+        {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full px-4 py-3 font-semibold text-white bg-cyan-500 rounded-lg hover:bg-cyan-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 disabled:bg-gray-400 transition-colors"
+        >
+          {loading ? "Joining..." : "Join Room"}
+        </button>
       </form>
     </div>
   );
