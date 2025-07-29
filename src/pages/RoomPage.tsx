@@ -117,7 +117,7 @@ export default function RoomPage() {
   }
 
   if (!roomData) {
-    return null; // Should be covered by error state
+    return null;
   }
 
   return (

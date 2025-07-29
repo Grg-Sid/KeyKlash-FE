@@ -1,5 +1,5 @@
 import type { Player } from "@/types/Player";
-import { getPlayerColor } from "@/utils/getPlayerColor"; // Assuming you have this utility
+import { getPlayerColor } from "@/utils/getPlayerColor";
 
 interface RoomInfoCardProps {
   code: string;
