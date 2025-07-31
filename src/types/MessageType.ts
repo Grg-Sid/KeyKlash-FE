@@ -3,6 +3,7 @@ export type MessageType =
   | "PLAYER_LEFT"
   | "PLAYER_PROGRESS"
   | "GAME_OVER"
+  | "GAME_RESTART"
   | "GAME_STARTED"
   | "TYPING_UPDATE"
   | "PLAYER_FINISHED"

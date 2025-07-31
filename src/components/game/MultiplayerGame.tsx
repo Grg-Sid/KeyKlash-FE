@@ -8,6 +8,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { TypingArea, type PlayerCursor } from "./TypingArea";
 import { getPlayerColor } from "@/utils/getPlayerColor";
 import { GameSummary } from "./GameSummary";
+import { generateRandomWords } from "@/utils/wordGenerator";
 
 type PlayerProgressPayload = {
   playerId: string;
@@ -47,7 +48,6 @@ export function MultiplayerGame({
     let gameDurationSeconds = 60;
     if (gameStartTimeRef.current) {
       gameDurationSeconds = (Date.now() - gameStartTimeRef.current) / 1000;
-      console.log(gameDurationSeconds);
     }
     const elapsedTimeInMinutes = gameDurationSeconds / 60;
     const { correctChars, incorrectChars, totalChars } = (
@@ -81,6 +81,7 @@ export function MultiplayerGame({
         type === "GAME_STARTED" ||
         type === "PLAYER_LEFT"
       ) {
+        setCountdown(5);
         setRoomData(payload as Room);
       } else if (type === "PLAYER_PROGRESS") {
         const progress = payload as PlayerProgressPayload;
@@ -96,8 +97,22 @@ export function MultiplayerGame({
               }
         );
       } else if (type === "PLAYER_FINISHED") {
-        const result = calculateResults();
-        setGameResult(result);
+        const progress = payload as PlayerProgressPayload;
+        if (progress.playerId === myPlayerId) {
+          const result = calculateResults();
+          setGameResult(result);
+        }
+      } else if (type === "GAME_RESTART") {
+        const updatedRoomData = payload as Room;
+        if (!updatedRoomData) return;
+
+        setRoomData(updatedRoomData);
+        setGamePhase("waiting");
+        setCountdown(5);
+        setGameResult(null);
+        setMyTypedText("");
+        gameStartTimeRef.current = null;
+        typingAreaInputRef.current?.focus();
       } else if (type === "GAME_OVER") {
         endGameRef?.current();
       }
@@ -106,6 +121,15 @@ export function MultiplayerGame({
   );
 
   const { sendMessage } = useWebSocket(roomData?.id || null, handleMessage);
+
+  const restartGame = useCallback(() => {
+    if (!roomData || roomData.createdBy?.id !== myPlayerId) return;
+
+    sendMessage("/app/game/restart", {
+      roomId: roomData.id,
+      newText: generateRandomWords(roomData.text.split(" ").length || 50),
+    });
+  }, [roomData, myPlayerId, sendMessage]);
 
   const endGame = useCallback(() => {
     if (gamePhase === "finished") return;
@@ -148,7 +172,6 @@ export function MultiplayerGame({
           setTimeout(() => {
             setCountdown(null);
             setGamePhase("typing");
-            gameStartTimeRef.current = Date.now();
             typingAreaInputRef.current?.focus();
           }, 500);
         } else {
@@ -171,6 +194,9 @@ export function MultiplayerGame({
   const handleOnType = useCallback(
     (newTypedText: string) => {
       if (gamePhase === "typing") {
+        if (gameStartTimeRef.current === null) {
+          gameStartTimeRef.current = Date.now();
+        }
         setMyTypedText(newTypedText);
         debouncedSendProgress();
       }
@@ -206,7 +232,9 @@ export function MultiplayerGame({
       ) : gamePhase === "finished" && gameResult ? (
         <GameSummary
           results={gameResult}
-          onRestart={() => window.location.reload()}
+          onRestart={
+            roomData?.createdBy?.id === myPlayerId ? restartGame : undefined
+          }
         />
       ) : (
         <>

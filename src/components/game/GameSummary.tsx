@@ -11,7 +11,7 @@ type GameResult = {
 
 interface GameSummaryProps {
   results: GameResult;
-  onRestart: () => void;
+  onRestart?: () => void;
 }
 
 export function GameSummary({ results, onRestart }: GameSummaryProps) {
@@ -51,15 +51,20 @@ export function GameSummary({ results, onRestart }: GameSummaryProps) {
         <div className="p-4 bg-gray-100 rounded-lg">
           <p className="text-gray-400">consistency</p>
           <p className="text-2xl font-semibold text-gray-700">N/A</p>{" "}
-          {/* Placeholder */}
         </div>
       </div>
-      <button
-        onClick={onRestart}
-        className="p-3 text-cyan-500 bg-cyan-500/10 rounded-lg font-semibold hover:bg-cyan-500/20 transition-colors"
-      >
-        <RefreshCwIcon size={24} />
-      </button>
+      {onRestart ? (
+        <button
+          onClick={onRestart}
+          className="p-3 text-cyan-500 bg-cyan-500/10 rounded-lg font-semibold hover:bg-cyan-500/20 transition-colors"
+        >
+          <RefreshCwIcon size={24} />
+        </button>
+      ) : (
+        <p className="text-sm text-gray-400 mt-2">
+          Waiting for host to restart...
+        </p>
+      )}
     </div>
   );
 }
