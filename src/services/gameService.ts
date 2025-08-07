@@ -59,7 +59,7 @@ export const getRoom = async (roomId: string): Promise<Room> => {
 
 export const getRoomByCode = async (roomCode: string): Promise<Room> => {
   try {
-    const response = await api.get<Room>(`/room/code/${roomCode}`);
+    const response = await api.get<Room>(`/room/${roomCode}`);
     return response.data;
   } catch (error) {
     console.error("Error fetching room by code:", error);

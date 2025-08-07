@@ -9,6 +9,7 @@ import { TypingArea, type PlayerCursor } from "./TypingArea";
 import { getPlayerColor } from "@/utils/getPlayerColor";
 import { GameSummary } from "./GameSummary";
 import { generateRandomWords } from "@/utils/wordGenerator";
+import type { Player } from "@/types/Player";
 
 type PlayerProgressPayload = {
   playerId: string;
@@ -97,9 +98,10 @@ export function MultiplayerGame({
               }
         );
       } else if (type === "PLAYER_FINISHED") {
-        const progress = payload as PlayerProgressPayload;
-        if (progress.playerId === myPlayerId) {
+        const progress = payload as Player;
+        if (progress.id === myPlayerId) {
           const result = calculateResults();
+          console.log("Game finished with result:", result);
           setGameResult(result);
         }
       } else if (type === "GAME_RESTART") {
@@ -114,6 +116,7 @@ export function MultiplayerGame({
         gameStartTimeRef.current = null;
         typingAreaInputRef.current?.focus();
       } else if (type === "GAME_OVER") {
+        console.log("Game over message received: ", payload);
         endGameRef?.current();
       }
     },

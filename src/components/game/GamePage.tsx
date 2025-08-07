@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useParams } from "react-router-dom";
-import { SinglePlayerGame } from "./SingleplayerGame";
 import { MultiplayerGame } from "./MultiplayerGame";
+import { SinglePlayerGame } from "./SinglePlayerGame";
 
 export default function GamePage() {
   const { roomCode } = useParams<{ roomCode?: string }>();
@@ -22,7 +22,7 @@ export default function GamePage() {
         {roomCode ? (
           <MultiplayerGame roomCode={roomCode} myPlayerId={myPlayerId} />
         ) : (
-          <SinglePlayerGame myPlayerId={myPlayerId} />
+          <SinglePlayerGame />
         )}
       </main>
     </div>

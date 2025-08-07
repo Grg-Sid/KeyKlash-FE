@@ -6,11 +6,7 @@ import { GameSummary } from "./GameSummary";
 import { SettingsDashboard } from "./SettingsDashboard";
 import { TypingArea } from "./TypingArea";
 
-type SinglePlayerGameProps = {
-  myPlayerId: string;
-};
-
-export function SinglePlayerGame({ myPlayerId }: SinglePlayerGameProps) {
+export function SinglePlayerGame() {
   const [textToType, setTextTypeToType] = useState<string>("");
   const [myTypedText, setMyTypedText] = useState<string>("");
   const myTypedTextRef = useRef(myTypedText);
