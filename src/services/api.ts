@@ -1,14 +1,10 @@
 import axios from "axios";
 
-export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://34.30.208.141:8080/api",
-  headers: {
-    "content-type": "application/json",
-  },
-});
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
+console.log("API URL:", API_URL);
 
-export const quoteApi = axios.create({
-  baseURL: "https://api.quotable.kurokeita.dev/api/quotes",
+export const api = axios.create({
+  baseURL: API_URL + "/api",
   headers: {
     "content-type": "application/json",
   },
