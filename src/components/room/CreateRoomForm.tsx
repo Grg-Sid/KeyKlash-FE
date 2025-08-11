@@ -32,39 +32,44 @@ export function CreateRoomForm() {
   };
 
   return (
-    <div className="w-full max-w-sm p-8 space-y-6 bg-white rounded-xl shadow-md">
-      <h2 className="text-2xl font-bold text-center text-gray-800">
-        Create Room
-      </h2>
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        <input
-          type="text"
-          placeholder="Enter your name"
-          name="creatorName"
-          value={creatorName}
-          onChange={(e) => setCreatorName(e.target.value)}
-          disabled={loading}
-          className="w-full px-4 py-3 bg-gray-100 border-2 border-transparent rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-400 transition"
-        />
-        <input
-          type="number"
-          placeholder="Enter your name"
-          name="wordCount"
-          value={wordCount}
-          onChange={(e) => setWordCount(Number(e.target.value))}
-          disabled={loading}
-          className="w-full px-4 py-3 bg-gray-100 border-2 border-transparent rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-400 transition"
-        />
+    <div className="flex items-center justify-center min-h-screen bg-[#f0f0f0]">
+      <div className="w-full max-w-sm p-8 space-y-6 bg-white rounded-xl shadow-md">
+        <h2 className="text-2xl font-bold text-center text-gray-800">
+          Create Room
+        </h2>
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <input
+            type="text"
+            placeholder="Enter your name"
+            name="creatorName"
+            value={creatorName}
+            onChange={(e) => setCreatorName(e.target.value)}
+            disabled={loading}
+            className="w-full px-4 py-3 bg-gray-100 border-2 border-transparent rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-400 transition"
+          />
+          <input
+            type="text"
+            placeholder="Enter word count"
+            name="wordCount"
+            value={wordCount}
+            onChange={(e) => {
+              const value = e.target.value.replace(/\D/g, ""); //
+              setWordCount(value ? Number(value) : 0);
+            }}
+            disabled={loading}
+            className="w-full px-4 py-3 bg-gray-100 border-2 border-transparent rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-400 transition"
+          />
 
-        {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full px-4 py-3 font-semibold text-white bg-cyan-500 rounded-lg hover:bg-cyan-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 disabled:bg-gray-400 transition-colors"
-        >
-          {loading ? "Creating..." : "Create and Join"}
-        </button>
-      </form>
+          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full px-4 py-3 font-semibold text-white bg-cyan-500 rounded-lg hover:bg-cyan-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 disabled:bg-gray-400 transition-colors"
+          >
+            {loading ? "Creating..." : "Create and Join"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
