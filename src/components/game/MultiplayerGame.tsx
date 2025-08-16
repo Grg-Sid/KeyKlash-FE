@@ -210,12 +210,12 @@ export function MultiplayerGame({
   const playerCursors: PlayerCursor[] = useMemo(
     () =>
       roomData?.players
-        .filter((p) => p.id !== myPlayerId)
-        .map((p) => ({
-          playerId: p.id,
-          position: p.currentPosition,
-          color: getPlayerColor(p.id),
-          nickname: p.nickname,
+        .filter((player) => player.id !== myPlayerId)
+        .map((player) => ({
+          playerId: player.id,
+          position: player.currentPosition,
+          color: getPlayerColor(player.id),
+          nickname: player.nickname,
         })) || [],
     [myPlayerId, roomData?.players]
   );
@@ -277,9 +277,13 @@ export function MultiplayerGame({
                         className="h-1.5 rounded-full"
                         style={{
                           width: `${
-                            (player.currentPosition /
-                              (roomData.text.length || 1)) *
-                            100
+                            player.id === myPlayerId
+                              ? (myTypedText.length /
+                                  (roomData.text.length || 1)) *
+                                100
+                              : (player.currentPosition /
+                                  (roomData.text.length || 1)) *
+                                100
                           }%`,
                           backgroundColor: getPlayerColor(player.id),
                           transition: "width 0.2s ease-in-out",

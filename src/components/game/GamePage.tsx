@@ -17,7 +17,6 @@ export default function GamePage() {
 
   return (
     <div className="bg-[#f0f0f0] min-h-screen text-[#333] flex flex-col font-sans">
-      <header className="px-12 py-3">{/* Header Content */}</header>
       <main className="flex-grow flex flex-col items-center justify-center -mt-16 px-4">
         {roomCode ? (
           <MultiplayerGame roomCode={roomCode} myPlayerId={myPlayerId} />
