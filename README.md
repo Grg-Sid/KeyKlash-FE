@@ -10,9 +10,10 @@ KeyKlash is a web-based typing game designed to test and improve your typing spe
 
 <img width="1919" height="971" alt="image" src="https://github.com/user-attachments/assets/6e2ea923-f6e7-4d4f-80e1-1fa31fe2525b" />
 
-<img width="1918" height="971" alt="image" src="https://github.com/user-attachments/assets/e67b84d1-99bf-4373-a03c-f95e70123181" />
+<img width="1838" height="1062" alt="image" src="https://github.com/user-attachments/assets/378db63e-a751-4308-b684-60f27f715bc8" />
 
-<img width="1914" height="983" alt="image" src="https://github.com/user-attachments/assets/674d0e29-90dc-4c84-8935-45b166d81c44" />
+<img width="1840" height="1064" alt="image" src="https://github.com/user-attachments/assets/437550b6-f441-4c7c-aa7f-6c4da6047e54" />
+
 
 -----
 
